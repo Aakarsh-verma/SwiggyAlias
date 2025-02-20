@@ -21,11 +21,15 @@ struct HeaderOffsetPreferenceKey: PreferenceKey {
 struct HomeContentView: View {
     @StateObject var productViewModel = ProductViewModel()
     @State private var headerOffset: CGFloat = 0
+    @State private var filterOffset: CGFloat = 0
+    @State private var newFilterOffset: CGFloat = 0
     @State private var isRefreshing: Bool = false
     @State private var pullOffset: CGFloat = 0
     @State var showNavigation: Bool = false
     @State var selected: ProductModel = ProductViewModel().productsGrid[0]
     @Namespace private var namespace
+    @State var showStickyFilters: Bool = false
+    @State var headerVisibility: Bool = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -44,9 +48,17 @@ struct HomeContentView: View {
                     contentSections
                 }
             }
-            header
-                .offset(y: headerOffset)
-                .animation(.spring(response: 0.4, dampingFraction: 0.7), value: headerOffset)
+            VStack {
+                header
+                    .opacity(headerOffset <= -120 ? 0 : 1)
+                if showStickyFilters {
+                    FilterTabWidgetView()
+                        .padding(.horizontal)
+                        .background(.white)
+                }
+            }
+            .offset(y: max(headerOffset, -120))
+            .animation(.spring(response: 0.4, dampingFraction: 0.7), value: headerOffset)
             
             if isRefreshing {
                 pullToRefreshLoader
@@ -70,16 +82,24 @@ struct HomeContentView: View {
             
             SectionHeaderView(title: "For You")
             gridItems
-            
+            GeometryReader { proxy in
+                FilterTabWidgetView()
+                    .background(.white)
+                    .onChange(of: proxy.frame(in: .global).minY) { newValue in
+                        handleStickyFilter(newValue)
+                    }
+            }
+            .frame(height: 50)
+            .opacity(showStickyFilters ? 0 : 1)
             BannerImageView(model: productViewModel.banners[0])
                 .padding(.vertical, 5)
             
             SectionHeaderView(title: "BEST OFFERS")
             horizontalScrollableItems
-            
-            FilterTabWidgetView()
+                
             
             VerticalProductView(dimension: CGFloat(UIScreen.main.bounds.width - 48), model: productViewModel.productBanner, hideDescription: true)
+                .zIndex(-1)
                 .onTapGesture {
                     withAnimation {
                         showNavigation.toggle()
@@ -172,8 +192,10 @@ struct HomeContentView: View {
         pullOffset = newOffset
         
         if delta > 0 {
+            print("Header min",  min(headerOffset + delta, 0))
             headerOffset = min(headerOffset + delta, 0)
         } else if delta < 0 {
+            print("Header max or zero",  min(headerOffset + delta, 0))
             if newOffset < -50 {
                 headerOffset = max(headerOffset + delta, -200)
             } else {
@@ -183,6 +205,19 @@ struct HomeContentView: View {
         
         if pullOffset > 80 && !isRefreshing {
             triggerPullToRefresh()
+        }
+    }
+    
+    private func handleStickyFilter(_ newOffset: CGFloat) {
+//        let delta = newOffset - filterOffset
+        filterOffset = newOffset
+//        print("OFFSET", newOffset)
+//        print("delta", delta)
+        newFilterOffset = max(newOffset, 0)
+        if newOffset < 0 {
+            showStickyFilters = true
+        } else {
+            showStickyFilters = false
         }
     }
 
